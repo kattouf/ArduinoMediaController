@@ -3,6 +3,7 @@
 #define PLAY_BUTTON_PIN 8
 #define NEXT_BUTTON_PIN 7
 #define LIKE_BUTTON_PIN 10
+#define LIKE_LED_PIN 11
 
 #define PREV_BUTTON_OUTPUT_CODE 101
 #define PLAY_BUTTON_OUTPUT_CODE 102
@@ -10,21 +11,27 @@
 #define VOLUME_UP_BUTTON_OUTPUT_CODE 104
 #define VOLUME_DOWN_BUTTON_OUTPUT_CODE 105
 #define LIKE_BUTTON_OUTPUT_CODE 106
-
 #define VOLUME_POT_VALUE_OUTPUT_START_CODE 200
 #define VOLUME_POT_VALUE_OUTPUT_END_CODE 299
+
+#define LIKE_LED_INPUT_CODE 101
 
 int prevPotValue = 0;
 boolean prevButtonUp = true;
 boolean playButtonUp = true;
 boolean nextButtonUp = true;
 boolean likeButtonUp = true;
+boolean ledEnabled = false;
+String serialInputAcc;
 
 void setup() {
+  pinMode(VOLUME_POT_PIN, INPUT);
   pinMode(PREV_BUTTON_PIN, INPUT_PULLUP);
   pinMode(PLAY_BUTTON_PIN, INPUT_PULLUP);
   pinMode(NEXT_BUTTON_PIN, INPUT_PULLUP);
   pinMode(LIKE_BUTTON_PIN, INPUT_PULLUP);
+
+  pinMode(LIKE_LED_PIN, OUTPUT);
 
   Serial.begin(9600);
 }
@@ -35,9 +42,42 @@ void loop() {
   handleButtonOnClicks(PLAY_BUTTON_PIN, &playButtonUp);
   handleButtonOnClicks(NEXT_BUTTON_PIN, &nextButtonUp);
   handleButtonOnClicks(LIKE_BUTTON_PIN, &likeButtonUp);
+
+  updateLikeLEDState();
 }
 
 // Common
+
+void updateLikeLEDState() {
+
+  while (Serial.available() > 0) {
+    char incomingChar = Serial.read();
+    if (incomingChar >= '0' && incomingChar <= '9' && serialInputAcc.length() <= 3) {
+      serialInputAcc += incomingChar;
+    } else {
+      serialInputAcc = "";
+    }
+  }
+
+  if (serialInputAcc.length() != 3) {
+    return;
+  }
+
+  boolean needToToggleLEDState = serialInputAcc == String(LIKE_LED_INPUT_CODE);
+  serialInputAcc = "";
+
+  if (!needToToggleLEDState) {
+    return;
+  }
+
+  ledEnabled = !ledEnabled;
+
+  if (ledEnabled) {
+    analogWrite(LIKE_LED_PIN, 64);
+  } else {
+    digitalWrite(LIKE_LED_PIN, LOW);
+  }
+}
 
 void handlePotOnChanges(int pin, int *prevValue, int startCode, int endCode) {
   int value = analogRead(VOLUME_POT_PIN);
