@@ -2,10 +2,14 @@
 #define PREV_BUTTON_PIN 9
 #define PLAY_BUTTON_PIN 8
 #define NEXT_BUTTON_PIN 7
+#define LIKE_BUTTON_PIN 10
 
 #define PREV_BUTTON_OUTPUT_CODE 101
 #define PLAY_BUTTON_OUTPUT_CODE 102
 #define NEXT_BUTTON_OUTPUT_CODE 103
+#define VOLUME_UP_BUTTON_OUTPUT_CODE 104
+#define VOLUME_DOWN_BUTTON_OUTPUT_CODE 105
+#define LIKE_BUTTON_OUTPUT_CODE 106
 
 #define VOLUME_POT_VALUE_OUTPUT_START_CODE 200
 #define VOLUME_POT_VALUE_OUTPUT_END_CODE 299
@@ -14,11 +18,13 @@ int prevPotValue = 0;
 boolean prevButtonUp = true;
 boolean playButtonUp = true;
 boolean nextButtonUp = true;
+boolean likeButtonUp = true;
 
 void setup() {
   pinMode(PREV_BUTTON_PIN, INPUT_PULLUP);
   pinMode(PLAY_BUTTON_PIN, INPUT_PULLUP);
   pinMode(NEXT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(LIKE_BUTTON_PIN, INPUT_PULLUP);
 
   Serial.begin(9600);
 }
@@ -28,6 +34,7 @@ void loop() {
   handleButtonOnClicks(PREV_BUTTON_PIN, &prevButtonUp);
   handleButtonOnClicks(PLAY_BUTTON_PIN, &playButtonUp);
   handleButtonOnClicks(NEXT_BUTTON_PIN, &nextButtonUp);
+  handleButtonOnClicks(LIKE_BUTTON_PIN, &likeButtonUp);
 }
 
 // Common
@@ -71,6 +78,9 @@ void buttonClickHandler(int pin) {
       break;
     case NEXT_BUTTON_PIN:
       outputCode = NEXT_BUTTON_OUTPUT_CODE;
+      break;
+    case LIKE_BUTTON_PIN:
+      outputCode = LIKE_BUTTON_OUTPUT_CODE;
       break;
     default:
       outputCode = -1;
