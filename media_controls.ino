@@ -14,7 +14,8 @@
 #define VOLUME_POT_VALUE_OUTPUT_START_CODE 200
 #define VOLUME_POT_VALUE_OUTPUT_END_CODE 299
 
-#define LIKE_LED_INPUT_CODE 101
+#define LIKE_LED_LIKED_INPUT_CODE 101
+#define LIKE_LED_UNLIKED_INPUT_CODE 102
 
 int prevPotValue = 0;
 boolean prevButtonUp = true;
@@ -63,15 +64,24 @@ void updateLikeLEDState() {
     return;
   }
 
-  boolean needToToggleLEDState = serialInputAcc == String(LIKE_LED_INPUT_CODE);
+  boolean needToEnableLED = serialInputAcc == String(LIKE_LED_LIKED_INPUT_CODE);
+  boolean needToDisableLED = serialInputAcc == String(LIKE_LED_UNLIKED_INPUT_CODE);
+
   serialInputAcc = "";
 
-  if (!needToToggleLEDState) {
+  boolean newLedEnabled = ledEnabled;
+  if (needToEnableLED) {
+    newLedEnabled = true;
+  }
+  if (needToDisableLED) {
+    newLedEnabled = false;
+  }
+
+  if (ledEnabled == newLedEnabled) {
     return;
   }
 
-  ledEnabled = !ledEnabled;
-
+  ledEnabled = newLedEnabled;
   if (ledEnabled) {
     analogWrite(LIKE_LED_PIN, 64);
   } else {
