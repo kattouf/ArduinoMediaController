@@ -1,4 +1,109 @@
-// constants
+#include <LiquidCrystal.h>
+
+LiquidCrystal lcd(7, 6, 5, 4, 3, 2); // RS, E, D4, D5, D6, D7
+
+// ui constants
+
+byte heartChar[8] = {
+  B00000,
+  B01010,
+  B11111,
+  B11111,
+  B11111,
+  B01110,
+  B00100,
+  B00000
+};
+#define HEART_CHAR_ID 0
+
+byte emptyHeartChar[8] = {
+  B00000,
+  B01010,
+  B10101,
+  B10001,
+  B10001,
+  B01010,
+  B00100,
+  B00000
+};
+#define EMPTY_HEART_CHAR_ID 1
+
+byte pauseChar[8] = {
+  B00000,
+  B11011,
+  B11011,
+  B11011,
+  B11011,
+  B11011,
+  B11011,
+  B00000
+};
+#define PAUSE_CHAR_ID 2
+
+byte equalizerState1[8] = {
+  B00001,
+  B00001,
+  B00001,
+  B00101,
+  B10101,
+  B11101,
+  B11111,
+  B11111
+};
+byte equalizerState2[8] = {
+  B00000,
+  B00000,
+  B00010,
+  B11011,
+  B11011,
+  B11011,
+  B11011,
+  B11111
+};
+byte equalizerState3[8] = {
+  B00010,
+  B00010,
+  B10010,
+  B10010,
+  B11011,
+  B11011,
+  B11111,
+  B11111
+};
+byte equalizerState4[8] = {
+  B00000,
+  B00000,
+  B01010,
+  B01110,
+  B11110,
+  B11110,
+  B11111,
+  B11111
+};
+byte equalizerState5[8] = {
+  B00000,
+  B00000,
+  B00000,
+  B01010,
+  B11110,
+  B11111,
+  B11111,
+  B11111
+};
+byte *equalizerStates[8] = { equalizerState1, equalizerState2, equalizerState3, equalizerState4, equalizerState5  };
+#define EQUALIZER_FIRST_STATE_CHAR_ID 3
+#define EQUALIZER_LAST_STATE_CHAR_ID 7
+
+#define EQUALIZER_REFRESH_PERIOD 200
+
+#define TEXT_SHIFT_DELAY 5000
+#define TEXT_SHIFT_PERIOD 300
+#define TEXT_MAX_SIZE 14
+
+#define LIKE_UI_DATA_TAG 101
+#define TRACK_INFO_UI_DATA_TAG 102
+
+// controls constants
 
 #define VOLUME_POT_PIN A0
 #define PLAY_BUTTON_PIN 8
@@ -13,9 +118,6 @@
 #define VOLUME_POT_VALUE_OUTPUT_START_CODE 200
 #define VOLUME_POT_VALUE_OUTPUT_END_CODE 299
 
-#define LIKE_INDICATION_LIKED_INPUT_CODE 101
-#define LIKE_INDICATION_DISLIKED_INPUT_CODE 102
-
 #define BUTTON_TAP_THRESHOLD 300
 
 // controls data
@@ -29,19 +131,48 @@ boolean likeButtonUp = true;
 int likeButtonClicksCount = 0;
 int prevPotValue = 0;
 
+// input data processing
+
+boolean commandParsing = false;
+String command = "";
+
+boolean dataParsing = false;
+String data = "";
+const String TRACK_INFO_DELIMETER = "<~>";
+
 // ui data
 
+unsigned long equalizerLastUpdateTimestamp = 0;
+byte equalizerCurrentState = EQUALIZER_FIRST_STATE_CHAR_ID;
+
 boolean likeIndicatorValue = false;
-String serialInputAcc;
+
+unsigned long textLastShiftTimestamp = 0;
+String title = "";
+String artist = "";
+int titleOffset = 0;
+int artistOffset = 0;
 
 // life cycle
 
 void setup() {
+  // controls
   pinMode(VOLUME_POT_PIN, INPUT);
   pinMode(PLAY_BUTTON_PIN, INPUT_PULLUP);
   pinMode(LIKE_BUTTON_PIN, INPUT_PULLUP);
 
   Serial.begin(9600);
+
+  // ui
+  lcd.begin(16, 2);
+
+  lcd.createChar(HEART_CHAR_ID, heartChar);
+  lcd.createChar(EMPTY_HEART_CHAR_ID, emptyHeartChar);
+  lcd.createChar(PAUSE_CHAR_ID, pauseChar);
+
+  for (int i = 0; i <= EQUALIZER_LAST_STATE_CHAR_ID - EQUALIZER_FIRST_STATE_CHAR_ID; i++) {
+    lcd.createChar(EQUALIZER_FIRST_STATE_CHAR_ID + i, equalizerStates[i]);
+  }
 }
 
 void loop() {
@@ -53,49 +184,199 @@ void loop() {
   checkButtonPendingClicks(PLAY_BUTTON_PIN, &playButtonClicksCount);
   checkButtonPendingClicks(LIKE_BUTTON_PIN, &likeButtonClicksCount);
 
-  //  ui
-  updateLikeIndicatorState();
+  // ui
+  parseUICommand();
+  parseUIData();
+  invokeUICommand();
+
+  updateUIState();
 }
 
-// handle ui data
+// read and render ui data
 
-void updateLikeIndicatorState() {
+void parseUICommand() {
+  if (Serial.available() <= 0) {
+    return;
+  }
 
-  while (Serial.available() > 0) {
-    char incomingChar = Serial.read();
-    if (incomingChar >= '0' && incomingChar <= '9' && serialInputAcc.length() <= 3) {
-      serialInputAcc += incomingChar;
-    } else {
-      serialInputAcc = "";
+  char incomingChar = commandParsing ? Serial.read() : Serial.peek();
+
+  if (!commandParsing) {
+    if (incomingChar == '[') {
+      Serial.read();
+      command = "";
+      commandParsing = true;
     }
-  }
-
-  if (serialInputAcc.length() != 3) {
     return;
   }
 
-  boolean needToIndicateLiked = serialInputAcc == String(LIKE_INDICATION_LIKED_INPUT_CODE);
-  boolean needToIndicateDisliked = serialInputAcc == String(LIKE_INDICATION_DISLIKED_INPUT_CODE);
-
-  serialInputAcc = "";
-
-  boolean newLikeIndicatorValue = likeIndicatorValue;
-  if (needToIndicateLiked) {
-    newLikeIndicatorValue = true;
-  }
-  if (needToIndicateDisliked) {
-    newLikeIndicatorValue = false;
-  }
-
-  if (likeIndicatorValue == newLikeIndicatorValue) {
+  if (incomingChar == ']') {
+    commandParsing = false;
     return;
   }
 
-  likeIndicatorValue = newLikeIndicatorValue;
-  if (likeIndicatorValue) {
-    //    analogWrite(LIKE_LED_PIN, 64);
+  if (incomingChar >= '0' && incomingChar <= '9') {
+    command += incomingChar;
   } else {
-    //    digitalWrite(LIKE_LED_PIN, LOW);
+    command = "";
+    commandParsing = false;
+  }
+}
+
+void parseUIData() {
+  if (commandParsing) {
+    return;
+  }
+
+  if (Serial.available() <= 0) {
+    return;
+  }
+
+  char incomingChar = dataParsing ? Serial.read() : Serial.peek();
+
+  if (!dataParsing) {
+    if (incomingChar == '{') {
+      Serial.read();
+      data = "";
+      dataParsing = true;
+    }
+    return;
+  }
+
+  if (incomingChar == '}') {
+    dataParsing = false;
+    return;
+  }
+
+  data += incomingChar;
+}
+
+void invokeUICommand() {
+  if (commandParsing || dataParsing) {
+    return;
+  }
+
+  int commandNum = command.toInt();
+  if (commandNum <= 0 || data.length() <= 0) {
+    return;
+  }
+
+  switch (commandNum) {
+    case LIKE_UI_DATA_TAG:
+      if (data == "1" || data == "0") {
+        boolean liked = data.toInt() == 1;
+        renderLike(liked);
+      }
+      break;
+    case TRACK_INFO_UI_DATA_TAG: {
+        int delimeterIndex = data.indexOf(TRACK_INFO_DELIMETER);
+        Serial.println(delimeterIndex);
+        String newTitle = data.substring(0, delimeterIndex);
+        String newArtist = data.substring(delimeterIndex + TRACK_INFO_DELIMETER.length(), data.length());
+        renderTrackInfo(newTitle, newArtist);
+      }
+      break;
+    default:
+      break;
+  }
+
+  command = "";
+  data = "";
+}
+
+void renderLike(boolean newValue) {
+  if (likeIndicatorValue == newValue) {
+    return;
+  }
+
+  likeIndicatorValue = newValue;
+  lcd.setCursor(15, 0);
+  int likeChar = likeIndicatorValue ? HEART_CHAR_ID : EMPTY_HEART_CHAR_ID;
+  lcd.write(byte(likeChar));
+}
+
+void renderTrackInfo(String newTitle, String newArtist) {
+  if (title == newTitle && artist == newArtist) {
+    return;
+  }
+
+  title = newTitle;
+  artist = newArtist;
+
+  renderText(title, 0);
+  renderText(artist, 1);
+
+  resetTextShiftingState();
+}
+
+void renderText(String text, int line) {
+  int textLength = text.length();
+  for (int i = 0; i < TEXT_MAX_SIZE; i++) {
+    lcd.setCursor(i, line);
+    if (i < textLength) {
+      lcd.write(text[i]);
+    } else {
+      lcd.write(' ');
+    }
+
+  }
+}
+
+void updateUIState() {
+  shiftTextIfNeeded(title, 0, &titleOffset);
+  shiftTextIfNeeded(artist, 1, &artistOffset);
+
+  showNextEqualizerSymbolIfNeeded();
+}
+
+void shiftTextIfNeeded(String text, int line, int *offset) {
+  const int textLength = text.length();
+  const int textOversize = textLength - TEXT_MAX_SIZE;
+
+  if (textOversize <= 0) {
+    return;
+  }
+
+  int period = *offset == 0 ? TEXT_SHIFT_DELAY : TEXT_SHIFT_PERIOD;
+
+  unsigned long currentTime = millis();
+  if (currentTime - textLastShiftTimestamp > period) {
+
+    *offset = *offset - 1;
+    if (*offset < -textOversize) {
+      *offset = 0;
+    }
+
+    for (int i = 0; i < TEXT_MAX_SIZE; i++) {
+      int shiftedIndex = i - *offset;
+      lcd.setCursor(i, line);
+      if (shiftedIndex >= 0 && shiftedIndex < textLength) {
+        lcd.write(text[shiftedIndex]);
+      } else {
+        lcd.write(' ');
+      }
+    }
+
+    textLastShiftTimestamp = currentTime;
+  }
+}
+
+void resetTextShiftingState() {
+  textLastShiftTimestamp = millis();
+  titleOffset = 0;
+  artistOffset = 0;
+}
+
+void showNextEqualizerSymbolIfNeeded() {
+  unsigned long currentTime = millis();
+  if (currentTime - equalizerLastUpdateTimestamp > EQUALIZER_REFRESH_PERIOD) {
+    byte nextState = equalizerCurrentState + 1;
+    equalizerCurrentState = nextState > EQUALIZER_LAST_STATE_CHAR_ID ? EQUALIZER_FIRST_STATE_CHAR_ID : nextState;
+
+    lcd.setCursor(15, 1);
+    lcd.write(equalizerCurrentState);
+
+    equalizerLastUpdateTimestamp = currentTime;
   }
 }
 
