@@ -30,13 +30,13 @@ byte emptyHeartChar[8] = {
 
 byte pauseChar[8] = {
   B00000,
+  B00000,
   B11011,
   B11011,
   B11011,
   B11011,
   B11011,
-  B11011,
-  B00000
+  B11011
 };
 #define PAUSE_CHAR_ID 2
 
@@ -96,7 +96,7 @@ byte *equalizerStates[8] = { equalizerState1, equalizerState2, equalizerState3, 
 
 #define EQUALIZER_REFRESH_PERIOD 200
 
-#define TEXT_SHIFT_DELAY 5000
+#define TEXT_SHIFT_DELAY 3000
 #define TEXT_SHIFT_PERIOD 300
 #define TEXT_MAX_SIZE 14
 
@@ -126,7 +126,7 @@ const String TRACK_INFO_DELIMETER = "<~>";
 // controls data
 
 int lastClickedButtonPin = 0;
-unsigned int lastClickedButtonTimestamp = 0;
+unsigned long lastClickedButtonTimestamp = 0;
 
 boolean playButtonUp = true;
 int playButtonClicksCount = 0;
@@ -326,25 +326,6 @@ void renderIsPlaying(boolean newValue) {
   lcd.write(byte(playingChar));
 }
 
-void showNextEqualizerSymbolIfNeeded() {
-  if (!playingIndicatorValue) {
-    unsigned long equalizerLastUpdateTimestamp = 0;
-    byte equalizerCurrentState = EQUALIZER_FIRST_STATE_CHAR_ID;
-    return;
-  }
-
-  unsigned long currentTime = millis();
-  if (currentTime - equalizerLastUpdateTimestamp > EQUALIZER_REFRESH_PERIOD) {
-    byte nextState = equalizerCurrentState + 1;
-    equalizerCurrentState = nextState > EQUALIZER_LAST_STATE_CHAR_ID ? EQUALIZER_FIRST_STATE_CHAR_ID : nextState;
-
-    lcd.setCursor(15, 1);
-    lcd.write(equalizerCurrentState);
-
-    equalizerLastUpdateTimestamp = currentTime;
-  }
-}
-
 void renderIsLiked(boolean newValue) {
   if (likeIndicatorValue == newValue) {
     return;
@@ -382,6 +363,25 @@ void renderText(String text, int line) {
   }
 }
 
+void showNextEqualizerSymbolIfNeeded() {
+  if (!playingIndicatorValue) {
+    unsigned long equalizerLastUpdateTimestamp = 0;
+    byte equalizerCurrentState = EQUALIZER_FIRST_STATE_CHAR_ID;
+    return;
+  }
+
+  unsigned long currentTime = millis();
+  if (currentTime - equalizerLastUpdateTimestamp > EQUALIZER_REFRESH_PERIOD) {
+    byte nextState = equalizerCurrentState + 1;
+    equalizerCurrentState = nextState > EQUALIZER_LAST_STATE_CHAR_ID ? EQUALIZER_FIRST_STATE_CHAR_ID : nextState;
+
+    lcd.setCursor(15, 1);
+    lcd.write(equalizerCurrentState);
+
+    equalizerLastUpdateTimestamp = currentTime;
+  }
+}
+
 void shiftTextIfNeeded(String text, int line, int *offset) {
   const int textLength = text.length();
   const int textOversize = textLength - TEXT_MAX_SIZE;
@@ -390,7 +390,7 @@ void shiftTextIfNeeded(String text, int line, int *offset) {
     return;
   }
 
-  int period = *offset == 0 ? TEXT_SHIFT_DELAY : TEXT_SHIFT_PERIOD;
+  int period = (*offset == 0 || *offset == -textOversize) ? TEXT_SHIFT_DELAY : TEXT_SHIFT_PERIOD;
 
   unsigned long currentTime = millis();
   if (currentTime - textLastShiftTimestamp > period) {
