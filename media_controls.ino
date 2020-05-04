@@ -100,8 +100,11 @@ byte *equalizerStates[8] = { equalizerState1, equalizerState2, equalizerState3, 
 #define TEXT_SHIFT_PERIOD 300
 #define TEXT_MAX_SIZE 14
 
-#define LIKE_UI_DATA_TAG 101
+#define IS_LIKED_UI_DATA_TAG 101
 #define TRACK_INFO_UI_DATA_TAG 102
+#define IS_PLAYING_UI_DATA_TAG 103
+
+const String TRACK_INFO_DELIMETER = "<~>";
 
 // controls constants
 
@@ -138,13 +141,13 @@ String command = "";
 
 boolean dataParsing = false;
 String data = "";
-const String TRACK_INFO_DELIMETER = "<~>";
 
 // ui data
 
 unsigned long equalizerLastUpdateTimestamp = 0;
 byte equalizerCurrentState = EQUALIZER_FIRST_STATE_CHAR_ID;
 
+boolean playingIndicatorValue = false;
 boolean likeIndicatorValue = false;
 
 unsigned long textLastShiftTimestamp = 0;
@@ -173,6 +176,8 @@ void setup() {
   for (int i = 0; i <= EQUALIZER_LAST_STATE_CHAR_ID - EQUALIZER_FIRST_STATE_CHAR_ID; i++) {
     lcd.createChar(EQUALIZER_FIRST_STATE_CHAR_ID + i, equalizerStates[i]);
   }
+
+  renderInitialData();
 }
 
 void loop() {
@@ -262,10 +267,16 @@ void invokeUICommand() {
   }
 
   switch (commandNum) {
-    case LIKE_UI_DATA_TAG:
+    case IS_PLAYING_UI_DATA_TAG:
+      if (data == "1" || data == "0") {
+        boolean playing = data.toInt() == 1;
+        renderIsPlaying(playing);
+      }
+      break;
+    case IS_LIKED_UI_DATA_TAG:
       if (data == "1" || data == "0") {
         boolean liked = data.toInt() == 1;
-        renderLike(liked);
+        renderIsLiked(liked);
       }
       break;
     case TRACK_INFO_UI_DATA_TAG: {
@@ -284,7 +295,57 @@ void invokeUICommand() {
   data = "";
 }
 
-void renderLike(boolean newValue) {
+void updateUIState() {
+  shiftTextIfNeeded(title, 0, &titleOffset);
+  shiftTextIfNeeded(artist, 1, &artistOffset);
+
+  showNextEqualizerSymbolIfNeeded();
+}
+
+void renderInitialData() {
+  renderText("MEDIA", 0);
+  renderText("CONTROLLER", 1);
+
+  lcd.setCursor(15, 0);
+  int likeChar = likeIndicatorValue ? HEART_CHAR_ID : EMPTY_HEART_CHAR_ID;
+  lcd.write(byte(likeChar));
+
+  lcd.setCursor(15, 1);
+  int playingChar = playingIndicatorValue ? EQUALIZER_FIRST_STATE_CHAR_ID : PAUSE_CHAR_ID;
+  lcd.write(byte(playingChar));
+}
+
+void renderIsPlaying(boolean newValue) {
+  if (playingIndicatorValue == newValue) {
+    return;
+  }
+
+  playingIndicatorValue = newValue;
+  lcd.setCursor(15, 1);
+  int playingChar = playingIndicatorValue ? EQUALIZER_FIRST_STATE_CHAR_ID : PAUSE_CHAR_ID;
+  lcd.write(byte(playingChar));
+}
+
+void showNextEqualizerSymbolIfNeeded() {
+  if (!playingIndicatorValue) {
+    unsigned long equalizerLastUpdateTimestamp = 0;
+    byte equalizerCurrentState = EQUALIZER_FIRST_STATE_CHAR_ID;
+    return;
+  }
+
+  unsigned long currentTime = millis();
+  if (currentTime - equalizerLastUpdateTimestamp > EQUALIZER_REFRESH_PERIOD) {
+    byte nextState = equalizerCurrentState + 1;
+    equalizerCurrentState = nextState > EQUALIZER_LAST_STATE_CHAR_ID ? EQUALIZER_FIRST_STATE_CHAR_ID : nextState;
+
+    lcd.setCursor(15, 1);
+    lcd.write(equalizerCurrentState);
+
+    equalizerLastUpdateTimestamp = currentTime;
+  }
+}
+
+void renderIsLiked(boolean newValue) {
   if (likeIndicatorValue == newValue) {
     return;
   }
@@ -318,15 +379,7 @@ void renderText(String text, int line) {
     } else {
       lcd.write(' ');
     }
-
   }
-}
-
-void updateUIState() {
-  shiftTextIfNeeded(title, 0, &titleOffset);
-  shiftTextIfNeeded(artist, 1, &artistOffset);
-
-  showNextEqualizerSymbolIfNeeded();
 }
 
 void shiftTextIfNeeded(String text, int line, int *offset) {
@@ -365,19 +418,6 @@ void resetTextShiftingState() {
   textLastShiftTimestamp = millis();
   titleOffset = 0;
   artistOffset = 0;
-}
-
-void showNextEqualizerSymbolIfNeeded() {
-  unsigned long currentTime = millis();
-  if (currentTime - equalizerLastUpdateTimestamp > EQUALIZER_REFRESH_PERIOD) {
-    byte nextState = equalizerCurrentState + 1;
-    equalizerCurrentState = nextState > EQUALIZER_LAST_STATE_CHAR_ID ? EQUALIZER_FIRST_STATE_CHAR_ID : nextState;
-
-    lcd.setCursor(15, 1);
-    lcd.write(equalizerCurrentState);
-
-    equalizerLastUpdateTimestamp = currentTime;
-  }
 }
 
 // handle controls data
