@@ -427,7 +427,7 @@ void handlePotChanges(int pin, int *prevValue, int startCode, int endCode) {
   int threshold = 10;
 
   if (abs(value - *prevValue) > threshold) {
-    int outputCode = map(value, 50, 1000, startCode, endCode);
+    int outputCode = map(value, 100, 1000, startCode, endCode);
     Serial.print(outputCode);
 
     *prevValue = value;
