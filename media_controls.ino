@@ -425,8 +425,9 @@ void resetTextShiftingState() {
 void handlePotChanges(int pin, int *prevValue, int startCode, int endCode) {
   int value = analogRead(VOLUME_POT_PIN);
   int threshold = 10;
+
   if (abs(value - *prevValue) > threshold) {
-    int outputCode = map(value, 0, 1023, startCode, endCode);
+    int outputCode = map(value, 50, 1000, startCode, endCode);
     Serial.print(outputCode);
 
     *prevValue = value;
